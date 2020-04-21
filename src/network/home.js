@@ -32,3 +32,16 @@ export function getUserState(id, type) {
     }
   })
 }
+
+export function addNewUser(username,password,email,mobile) {
+  return request({
+    url: '/users',
+    method: 'post',
+    data: {
+      username,
+      password,
+      email,
+      mobile
+    }
+  })
+}

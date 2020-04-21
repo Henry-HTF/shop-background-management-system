@@ -17,7 +17,7 @@
           </el-input>
         </el-col>
         <el-col :span="4">
-          <el-button type="primary">添加用户</el-button>
+          <el-button type="primary" @click="addDialogVisible = true">添加用户</el-button>
         </el-col>
       </el-row>
       <!-- 用户列表区域 -->
@@ -59,16 +59,60 @@
         layout="total, sizes, prev, pager, next, jumper"
         :total="total"
       ></el-pagination>
+      <!-- 添加用户对话框 -->
+      <el-dialog title="添加用户" :visible.sync="addDialogVisible" width="50%" @close="addDialogClosed">
+        <!-- 内容主题区域 -->
+        <el-form :model="addForm" :rules="addFormRules" ref="addFormRef" label-width="80px">
+          <el-form-item label="用户名" prop="username">
+            <el-input v-model="addForm.username"></el-input>
+          </el-form-item>
+          <el-form-item label="密码" prop="password">
+            <el-input v-model="addForm.password"></el-input>
+          </el-form-item>
+          <el-form-item label="邮箱" prop="email">
+            <el-input v-model="addForm.email"></el-input>
+          </el-form-item>
+          <el-form-item label="手机" prop="mobile">
+            <el-input v-model="addForm.mobile"></el-input>
+          </el-form-item>
+        </el-form>
+
+        <!-- 底部区域 -->
+        <span slot="footer" class="dialog-footer">
+          <el-button @click="addDialogVisible = false">取 消</el-button>
+          <el-button type="primary" @click="addUser">确 定</el-button>
+        </span>
+      </el-dialog>
     </el-card>
   </div>
 </template>
 
 <script>
-import { getUsersList, getUserState} from "../../../network/home";
+import { getUsersList, getUserState, addNewUser } from "../../../network/home";
 
 export default {
   name: "Users",
   data() {
+    // 验证邮箱的规则
+    var checkEmile = (rule, value, cb) => {
+      // 验证的正则表达式
+      const regEmile = /^([a-zA-Z0-9_-])+@([a-zA-Z0-9_-])+(\.[a-zA-Z0-9_-])+/
+      if(regEmile.test(value)) {
+        return cb()
+      }
+      cb(new Error('请输入合法邮箱'))
+    }
+
+    // 验证手机号的规则
+    var checkMobile = (rule, value, cb) => {
+      // 验证手机号的正则表达式
+      const regMobile = /^(0|86|17951)?(13[0-9]|15[0123456789]|17[678]|18[0-9]|14[57])[0-9]{8}$/
+      if(regMobile.test(value)) {
+        return cb()
+      }
+      cb(new Error('请输入合法手机号'))
+    }
+
     return {
       // 获取用户列表的参数对象
       queryInfo: {
@@ -81,7 +125,67 @@ export default {
       usersList: [],
       total: 0,
       uid: null,
-      userState: null
+      userState: null,
+      // 控制添加用户对话框的显示隐藏
+      addDialogVisible: false,
+      // 添加用户表单数据
+      addForm: {
+        username: "",
+        password: "",
+        email: "",
+        mobile: ""
+      },
+      // 添加用户表单的规则
+      addFormRules: {
+        username: [
+          {
+            required: true,
+            message: "请输入用户名",
+            trigger: "blur"
+          },
+          {
+            min: 3,
+            max: 10,
+            message: "用户名长度在3-10个字符之间",
+            trigger: "blur"
+          }
+        ],
+        password: [
+          {
+            required: true,
+            message: "请输入密码",
+            trigger: "blur"
+          },
+          {
+            min: 6,
+            max: 15,
+            message: "用户名长度在6-15个字符之间",
+            trigger: "blur"
+          }
+        ],
+        email: [
+          {
+            required: true,
+            message: "请输入邮箱",
+            trigger: "blur"
+          },
+          {
+            validator: checkEmile,
+            trigger: 'blur'
+          }
+        ],
+        mobile: [
+          {
+            required: true,
+            message: "请输入手机号",
+            trigger: "blur"
+          },
+          {
+            validator: checkMobile,
+            trigger: 'blur'
+          }
+        ]
+      }
     };
   },
   created() {
@@ -91,24 +195,36 @@ export default {
     // 监听 pagesize 更改的事件函数
     handleSizeChange(newSize) {
       // console.log(newSize);
-      this.queryInfo.pagesize = newSize
-      this.getUsersList()
-      
+      this.queryInfo.pagesize = newSize;
+      this.getUsersList();
     },
     // 监听 页面值 改变的事件函数
     handleCurrentChange(newPage) {
       // console.log(newPage);
-      this.queryInfo.pagenum = newPage
-      this.getUsersList()
+      this.queryInfo.pagenum = newPage;
+      this.getUsersList();
     },
     // 监听 用户状态 改变的事件函数
     uerStateChanged(userInfo) {
       // console.log(userInfo);
-      this.uid = userInfo.id
-      this.userState = userInfo.mg_state
+      this.uid = userInfo.id;
+      this.userState = userInfo.mg_state;
       this.getUserState();
-
     },
+    // 监听 添加用户对话框 关闭事件
+    addDialogClosed() {
+      this.$refs.addFormRef.resetFields()
+    },
+    // 点击按钮，添加新用户
+    addUser() {
+      this.$refs.addFormRef.validate(valid => {
+        if(!valid) return
+        // 发送添加用户的网络请求
+        this.addNewUser()
+      })
+    },
+
+    // 网络请求的函数
     getUsersList() {
       getUsersList(
         this.queryInfo.query,
@@ -129,13 +245,27 @@ export default {
       getUserState(this.uid, this.userState).then(res => {
         // console.log(res);
         if (res.data.meta.status !== 200) {
-          this.userState = !this.userState
-          return this.$msg.error('更新用户状态失败！')
-        }else{
-        this.$msg.success('更新用户状态成功！')
+          this.userState = !this.userState;
+          return this.$msg.error("更新用户状态失败！");
+        } else {
+          this.$msg.success("更新用户状态成功！");
         }
-      })
+      });
     },
+    addNewUser() {
+      addNewUser(this.addForm.username, this.addForm.password, this.addForm.email, this.addForm.mobile).then(res => {
+        // console.log(res);
+        if(res.data.meta.status !== 201) {
+          this.$msg.error('添加用户失败')
+        }
+        this.$msg.success('添加用户成功')
+
+        // 隐藏添加对话框
+        this.addDialogVisible = false
+        // 刷新列表数据
+        this.getUsersList()
+      })
+    }
   }
 };
 </script>
